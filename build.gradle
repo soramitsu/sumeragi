@@ -1,16 +1,32 @@
+buildscript {
+    ext.kotlin_version = '1.3.21'
+}
+
 plugins {
     id 'org.jetbrains.kotlin.jvm' version '1.3.21'
 }
+
+
 
 group 'soramitsu'
 version '1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
+    jcenter()
+
 }
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.0-RC2'
+
+    compile 'io.github.microutils:kotlin-logging:1.7.6'
+    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.5'
+    compile group: 'org.slf4j', name: 'slf4j-simple', version: '1.6.4'
+
+
 }
 
 compileKotlin {
