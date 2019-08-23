@@ -3,6 +3,7 @@ import time.*
 import kotlinx.coroutines.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.lang.Math.abs
 
 
 val BLOCK_TIME = 1.seconds
@@ -11,9 +12,12 @@ val N = 3 * F + 1
 var ID = 0
 val BUFFER_SIZE = 1
 
+
 enum class ClientType {
     PEER, CLIENT
 }
+
+val logger = LoggerFactory.getLogger("Main")
 
 data class Transaction(val hash: Int, val valid: Boolean = true)
 
@@ -21,9 +25,8 @@ data class Context(val clientType: ClientType, val clientId: Int)
 
 data class Block(val height: Int, val hash: Long, val txs: List<Transaction>)
 
-data class Peer(var id: Int = 0, val malicious: Boolean = false) {
-    private val logger : Logger
-
+data class Peer(val id: Int, val bufferSize : Int, val malicious: Boolean = false) {
+    private val logger = LoggerFactory.getLogger("Peer$id")
 
 
     var setA = listOf<Peer>()
@@ -34,15 +37,9 @@ data class Peer(var id: Int = 0, val malicious: Boolean = false) {
     val txHistory = mutableSetOf<Transaction>()
     var txs = mutableListOf<Transaction>()
     var peers = listOf<Peer>()
-    val blocks = mutableListOf(Block(0, 0, listOf()))
+    val blocks = mutableListOf(Block(1, 0, listOf()))
     val votes = mutableListOf<Block>()
 
-    init {
-        this.id = ID
-        ID++
-        logger =  LoggerFactory.getLogger("Peer$id")
-
-    }
 
     fun init() {
         orderPeers()
@@ -62,34 +59,39 @@ data class Peer(var id: Int = 0, val malicious: Boolean = false) {
         leader = setA.first()
         tail = setA.last()
         logger.info("Ordered: Leader ${leader!!.id}, Tail: ${tail!!.id} ")
+        println(setA)
+        println(setB)
+
 
     }
 
     fun createBlock(): Block {
-        return Block(blocks.last().height + 1, Random().nextLong(), txs)
+        val hash = txs.map { it.hash }.sum().toLong()
+        return Block(blocks.last().height + 1, hash, txs.toList())
 
     }
 
     fun propagateTx(tx: Transaction) {
         logger.info("Propagate $tx ")
+        val thisContext = Context(ClientType.PEER, this.id)
+
         peers.forEach {
-            val thisContext = Context(ClientType.PEER, this.id)
             it.onTransaction(thisContext, tx)
         }
     }
 
     fun onTransaction(context: Context, tx: Transaction) {
-//        logger.info("Got transaction $tx from context $context")
+        logger.info("Got transaction $tx from context $context")
 
-        if (context.clientType == ClientType.CLIENT || !txHistory.contains(tx)) {
+        if (!txHistory.contains(tx)) {
             txHistory.add(tx)
-            txs.add(tx)
+            txs.add(tx.copy())
             propagateTx(tx)
         }
     }
 
     fun onCommit(context: Context, block: Block) {
-        logger.info("onCommit from $context")
+        logger.info("onCommit from $context, block: $block")
         if (context.clientId == tail!!.id) {
             blocks.add(block)
             logger.info("Block added: $block")
@@ -114,8 +116,10 @@ data class Peer(var id: Int = 0, val malicious: Boolean = false) {
                 if (votes.distinct().size == 1 && isValid) {
                     //Commit
                     peers.forEach { peer ->
+                        logger.info("Commit $block")
                         peer.onCommit(ctx, block)
                     }
+
                 }
             }
 
@@ -135,7 +139,7 @@ data class Peer(var id: Int = 0, val malicious: Boolean = false) {
     }
 
     fun round() {
-        if (txs.size == BUFFER_SIZE) {
+        if (txs.size == bufferSize) {
             // Create block if leader
             if (leader == this) {
                 val block = createBlock()
@@ -160,23 +164,17 @@ data class Peer(var id: Int = 0, val malicious: Boolean = false) {
     }
 }
 
-fun split(peers: List<Peer>): Pair<List<Peer>, List<Peer>> {
-    val n = peers.size
-    val f = (n - 1) / 3
-    return Pair(peers.subList(0, 2 * f + 1), peers.subList(2 * f + 1, peers.size))
-}
 
 fun main() {
-    val peers = Array(N) { Peer() }.toList()
-    peers.forEach {
-        it.peers = peers
-        it.init()
-    }
+    logger.error("Start")
+
+    val peers = createPeers(N, BUFFER_SIZE)
+
     val ctx = Context(ClientType.CLIENT, 1)
 
-    repeat(6) {
-
-        peers.first().onTransaction(ctx, Transaction(2))
+    repeat(2) {
+        println("___________________")
+        peers.first().onTransaction(ctx, Transaction(Random().nextInt()))
         peers.forEach {
             it.round()
         }
