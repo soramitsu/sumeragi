@@ -1,3 +1,4 @@
+import java.time.Duration
 
 fun split(peers: List<Peer>): Pair<List<Peer>, List<Peer>> {
     val n = peers.size
@@ -5,8 +6,8 @@ fun split(peers: List<Peer>): Pair<List<Peer>, List<Peer>> {
     return Pair(peers.subList(0, 2 * f + 1), peers.subList(2 * f + 1, peers.size))
 }
 
-fun createPeers(n: Int, bufferSize: Int) : List<Peer>{
-    val peers = (0 until n).map { Peer(it, bufferSize) }
+fun createPeers(n: Int, bufferSize: Int, bufferTime: Duration) : List<Peer>{
+    val peers = (0 until n).map { Peer(it, bufferSize, bufferTime) }
     peers.forEach {
         it.peers = peers
         it.init()
