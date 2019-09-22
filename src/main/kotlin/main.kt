@@ -4,13 +4,15 @@ import kotlinx.coroutines.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.time.Duration
+import kotlin.concurrent.schedule
 
 
 val BUFFER_TIME = 1.seconds
 val F = 1
 val N = 3 * F + 1
 var ID = 0
-val BUFFER_SIZE = 1
+const val BUFFER_SIZE = 1
+val BLOCK_TIME = 1.seconds
 
 enum class ClientType {
     PEER, CLIENT
@@ -28,12 +30,13 @@ data class Peer(
     val id: Int,
     val bufferSize: Int,
     val bufferTime: Duration = BUFFER_TIME,
-    val malicious: Boolean = false
+    val blockTime: Duration = BLOCK_TIME,
+    var malicious: Boolean = false
 ) {
     private val logger = LoggerFactory.getLogger("Peer$id")
 
-    var setA = listOf<Peer>()
-    var setB = listOf<Peer>()
+    var setA = mutableListOf<Peer>()
+    var setB = mutableListOf<Peer>()
     var leader: Peer? = null
     var tail: Peer? = null
 
@@ -57,8 +60,8 @@ data class Peer(
         val rng = Random(blocks.last().hash)
         peers = peers.sortedBy { it.id }.shuffled(rng)
         val (a, b) = split(peers)
-        setA = a
-        setB = b
+        setA = a.toMutableList()
+        setB = b.toMutableList()
 
         leader = setA.first()
         tail = setA.last()
@@ -138,13 +141,34 @@ data class Peer(
     private fun propagateBlock(block: Block, peers: List<Peer>) {
         val ctx = Context(ClientType.PEER, this.id)
         peers.forEach {
-            if (it != this)
+            if (it != this && !malicious)
                 it.onBlock(ctx, block)
         }
     }
 
     private fun timePassed() = System.currentTimeMillis() - lastBlockTime > bufferTime.toMillis()
 
+    fun changeLeader() {
+        val oldLeader = setA.removeAt(0)
+        val newLeader = setA.first()
+
+        setA.add(setB.first())
+        setB.removeAt(0)
+        setB.add(oldLeader)
+
+        leader = newLeader
+    }
+
+    fun startBlockTimer() {
+        logger.info("Start block timer")
+        val currentBlock = blocks.size
+        Timer().schedule(BLOCK_TIME.toMillis()) {
+            if (blocks.size == currentBlock) {
+                logger.info("Commit failed, changing the leader")
+                changeLeader()
+            }
+        }
+    }
 
     fun round() {
         if (txs.size == bufferSize || (timePassed() && txs.isNotEmpty())) {
@@ -153,6 +177,10 @@ data class Peer(
                 val block = createBlock()
                 propagateBlock(block, setA)
             }
+            GlobalScope.launch {
+                startBlockTimer()
+            }
+
 
         }
     }
@@ -176,7 +204,7 @@ data class Peer(
 fun main() {
     logger.error("Start")
 
-    val peers = createPeers(N, BUFFER_SIZE, BUFFER_TIME)
+    val peers = createPeers(N, BUFFER_SIZE, BUFFER_TIME, BLOCK_TIME)
 
     val ctx = Context(ClientType.CLIENT, 1)
 
