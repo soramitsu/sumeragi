@@ -88,3 +88,11 @@ https://github.com/soramitsu/sumeragi/blob/master/src/test/kotlin/SumeragiTest.k
 - a peer may withhold their signature so as to prevent or slow down consensus
 - a peer may make a false accusation against the leader
 - a peer may make a false accusation against the proxy tail
+
+
+# Additional notes
+* Default configuration is 2f+1 active nodes and f of passive nodes during process of consensus desigion. 
+We can make it configurable by some property. For cases with moer faulty nodes addition of bigger amount of nodes 
+to active pool can add more fault tolerance. Because for default case if one of 2f+1 active nodes is faulty we have
+ to restart consensus round. If we will add more nodes to active pool it will help not to fail when some of faulty nodes
+ are in active pool. So we will have less trafic reduction optimisation but better faulty tolerance optimisation.
